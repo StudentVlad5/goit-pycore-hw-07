@@ -3,8 +3,81 @@ import re
 from datetime import datetime, timedelta
 from termcolor import colored
 import os
+from functools import wraps
 
 path = "./contacts.txt"
+
+# File open for reading
+def file_read():
+    if not os.path.exists(path):
+        print(f"{colored('File not found', 'red')}")
+        return {}
+
+    contacts = {}
+    with open(path, 'r') as file:
+        for line in file:
+            parts = [p.strip() for p in line.strip().split(',')]
+            if len(parts) < 1:
+                continue 
+            
+            name = parts[0]
+            phones_str = parts[1] if len(parts) > 1 else ""
+            birthday = parts[2] if len(parts) > 2 else None
+
+            phones = [p.strip() for p in phones_str.split('-') if p.strip()]
+
+            if name in contacts:
+                record = contacts[name]
+            else:
+                record = Record(name)
+                contacts[name] = record
+
+            for phone in phones:
+                try:
+                    record.add_phone(phone)
+                except ValueError:
+                    print(colored(f"Invalid phone number '{phone}' for {name}.", 'yellow'))
+
+            if birthday:
+                try:
+                    record.add_birthday(birthday)
+                except ValueError:
+                    print(colored(f"Invalid birthday '{birthday}' for {name}.", 'yellow'))
+    return contacts
+
+# Write all contacts from AddressBook to the file
+def file_write(contacts):
+    try:
+        with open(path, 'w') as file:
+            for record in contacts.values():
+                phones_str = "-".join([str(p.value) for p in record.phones])  
+                birthday_str = record.birthday.value.date().strftime("%d.%m.%Y") if record.birthday else ""
+                if birthday_str:
+                    file.write(f"{record.name.value}, {phones_str}, {birthday_str}\n")
+                else:
+                    file.write(f"{record.name.value}, {phones_str},\n")  
+        print(f"{colored('Contacts saved successfully', 'green')}")
+    except Exception as e:
+        print(f"{colored('An error occurred while saving contacts:', 'yellow')} {colored(e, 'red')}")
+
+def parse_input(user_input):
+    cmd, *args = user_input.split()
+    cmd = cmd.strip().lower()
+    return cmd, args
+
+# wrap of errors
+def input_error(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs): 
+        try:
+            return func(self, *args, **kwargs)
+        except ValueError as e:
+            print(f"Error: {e}")
+        except IndexError:
+            print("Error: Not enough arguments provided.")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+    return wrapper
 
 class Field:
     def __init__(self, value):
@@ -79,7 +152,7 @@ class Record:
         except ValueError as e:
             print(f"Error: {e}")
             return 0
-
+    @input_error
     def add_birthday(self, birthday):
         if self.birthday is not None:
             print(f"Birthday for {self.name.value} already exists.")
@@ -101,7 +174,7 @@ class Record:
         except ValueError as e:
             print(f"Error: {e}")
             return 0
-    
+    @input_error
     def show_birthday(self):
         if self.birthday is None:
             return f"{colored("Birthday for",'yellow')} {colored(self.name.value, 'red')}{colored(" is not set.", 'yellow')}"
@@ -131,7 +204,7 @@ class AddressBook(UserDict):
         else:
             print(f"{colored("Error: Record for",'yellow')} {colored(name, 'red')} {colored("not found.", 'yellow')}")
             return 0
-
+    @input_error
     def birthdays(self, check_day=None):
         try: 
             check_date = datetime.strptime(check_day, "%d.%m.%Y")
@@ -166,64 +239,6 @@ class AddressBook(UserDict):
     
     def __str__(self):
         return "\n".join(str(record) for record in self.data.values())
-
-# File open for reading
-def file_read():
-    if not os.path.exists(path):
-        print(f"{colored('File not found', 'red')}")
-        return {}
-
-    contacts = {}
-    with open(path, 'r') as file:
-        for line in file:
-            parts = [p.strip() for p in line.strip().split(',')]
-            if len(parts) < 1:
-                continue 
-            
-            name = parts[0]
-            phones_str = parts[1] if len(parts) > 1 else ""
-            birthday = parts[2] if len(parts) > 2 else None
-
-            phones = [p.strip() for p in phones_str.split('-') if p.strip()]
-
-            if name in contacts:
-                record = contacts[name]
-            else:
-                record = Record(name)
-                contacts[name] = record
-
-            for phone in phones:
-                try:
-                    record.add_phone(phone)
-                except ValueError:
-                    print(colored(f"Invalid phone number '{phone}' for {name}.", 'yellow'))
-
-            if birthday:
-                try:
-                    record.add_birthday(birthday)
-                except ValueError:
-                    print(colored(f"Invalid birthday '{birthday}' for {name}.", 'yellow'))
-    return contacts
-
-# Write all contacts from AddressBook to the file
-def file_write(contacts):
-    try:
-        with open(path, 'w') as file:
-            for record in contacts.values():
-                phones_str = "-".join([str(p.value) for p in record.phones])  
-                birthday_str = record.birthday.value.date().strftime("%d.%m.%Y") if record.birthday else ""
-                if birthday_str:
-                    file.write(f"{record.name.value}, {phones_str}, {birthday_str}\n")
-                else:
-                    file.write(f"{record.name.value}, {phones_str},\n")  
-        print(f"{colored('Contacts saved successfully', 'green')}")
-    except Exception as e:
-        print(f"{colored('An error occurred while saving contacts:', 'yellow')} {colored(e, 'red')}")
-
-def parse_input(user_input):
-    cmd, *args = user_input.split()
-    cmd = cmd.strip().lower()
-    return cmd, args
 
 def main():
     book = AddressBook()
